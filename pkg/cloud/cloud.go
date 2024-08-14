@@ -39,6 +39,8 @@ import (
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 // AWS volume types
@@ -94,6 +96,8 @@ const (
 	volumeDetachedState = "detached"
 	volumeAttachedState = "attached"
 	cacheForgetDelay    = 1 * time.Hour
+
+	assumeRoleDuration = 1 * time.Hour
 )
 
 // AWS provisioning limits.
@@ -333,15 +337,21 @@ var _ Cloud = &cloud{}
 
 // NewCloud returns a new instance of AWS cloud
 // It panics if session is invalid
-func NewCloud(region string, awsSdkDebugLog bool, userAgentExtra string, batching bool) (Cloud, error) {
-	c := newEC2Cloud(region, awsSdkDebugLog, userAgentExtra, batching)
+func NewCloud(region string, awsSdkDebugLog bool, userAgentExtra string, batching bool, roleArn string) (Cloud, error) {
+	c := newEC2Cloud(region, awsSdkDebugLog, userAgentExtra, batching, roleArn)
 	return c, nil
 }
 
-func newEC2Cloud(region string, awsSdkDebugLog bool, userAgentExtra string, batchingEnabled bool) Cloud {
+func newEC2Cloud(region string, awsSdkDebugLog bool, userAgentExtra string, batchingEnabled bool, roleArn string) Cloud {
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
 	if err != nil {
 		panic(err)
+	}
+
+	if roleArn != "" {
+		cfg.Credentials = stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleArn, func(aro *stscreds.AssumeRoleOptions) {
+			aro.Duration = assumeRoleDuration
+		})
 	}
 
 	if awsSdkDebugLog {

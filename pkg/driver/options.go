@@ -32,6 +32,9 @@ type Options struct {
 	// If empty, the in-cluster config will be loaded.
 	Kubeconfig string
 
+	//RoleArn is the role driver will use to interact with the AWS EC2 APIs.
+	RoleArn string
+
 	// #### Server options ####
 
 	//Endpoint is the endpoint for the CSI driver server
