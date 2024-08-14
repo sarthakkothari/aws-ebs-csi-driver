@@ -94,6 +94,7 @@ type Options struct {
 
 func (o *Options) AddFlags(f *flag.FlagSet) {
 	f.StringVar(&o.Kubeconfig, "kubeconfig", "", "Absolute path to a kubeconfig file. The default is the emtpy string, which causes the in-cluster config to be used")
+	f.StringVar(&o.RoleArn, "role-arn", "", "Arn of the role to be used while interacting with EC2 APIs. The default is the emtpy string, which causes the role provided by the Pod identity or OIDC to be used.")
 
 	// Server options
 	f.StringVar(&o.Endpoint, "endpoint", DefaultCSIEndpoint, "Endpoint for the CSI driver server")
