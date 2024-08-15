@@ -97,7 +97,7 @@ const (
 	volumeAttachedState = "attached"
 	cacheForgetDelay    = 1 * time.Hour
 
-	assumeRoleDuration = 1 * time.Hour
+	assumeRoleSessionDuration = 1 * time.Hour
 )
 
 // AWS provisioning limits.
@@ -337,21 +337,15 @@ var _ Cloud = &cloud{}
 
 // NewCloud returns a new instance of AWS cloud
 // It panics if session is invalid
-func NewCloud(region string, awsSdkDebugLog bool, userAgentExtra string, batching bool, roleArn string) (Cloud, error) {
-	c := newEC2Cloud(region, awsSdkDebugLog, userAgentExtra, batching, roleArn)
+func NewCloud(region string, awsSdkDebugLog bool, userAgentExtra string, batching bool, roleARN string) (Cloud, error) {
+	c := newEC2Cloud(region, awsSdkDebugLog, userAgentExtra, batching, roleARN)
 	return c, nil
 }
 
-func newEC2Cloud(region string, awsSdkDebugLog bool, userAgentExtra string, batchingEnabled bool, roleArn string) Cloud {
+func newEC2Cloud(region string, awsSdkDebugLog bool, userAgentExtra string, batchingEnabled bool, roleARN string) Cloud {
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
 	if err != nil {
 		panic(err)
-	}
-
-	if roleArn != "" {
-		cfg.Credentials = stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleArn, func(aro *stscreds.AssumeRoleOptions) {
-			aro.Duration = assumeRoleDuration
-		})
 	}
 
 	if awsSdkDebugLog {
@@ -365,7 +359,19 @@ func newEC2Cloud(region string, awsSdkDebugLog bool, userAgentExtra string, batc
 		os.Setenv("AWS_EXECUTION_ENV", "aws-ebs-csi-driver-"+driverVersion)
 	}
 
-	svc := ec2.NewFromConfig(cfg, func(o *ec2.Options) {
+	ec2Config := cfg
+	if roleARN != "" {
+		creds := stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleARN, func(aro *stscreds.AssumeRoleOptions) {
+			aro.Duration = assumeRoleSessionDuration
+		})
+		ec2Config = aws.Config{
+			Region:       cfg.Region,
+			DefaultsMode: aws.DefaultsModeStandard,
+			Credentials:  aws.NewCredentialsCache(creds),
+		}
+	}
+
+	svc := ec2.NewFromConfig(ec2Config, func(o *ec2.Options) {
 		o.APIOptions = append(o.APIOptions,
 			RecordRequestsMiddleware(),
 		)
